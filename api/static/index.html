@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pokemon Price Spread</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f5f5f7;
+    --card-bg: #ffffff;
+    --text: #1a1a1a;
+    --muted: #6b6b6b;
+    --border: #e2e2e5;
+    --accent: #2f6fed;
+    --cheap: #1a8a4c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121214;
+      --card-bg: #1c1c1f;
+      --text: #f0f0f0;
+      --muted: #9a9a9e;
+      --border: #2c2c30;
+      --accent: #6fa2ff;
+      --cheap: #4fd587;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    padding: 1.5rem 2rem 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 1rem;
+  }
+  h1 { font-size: 1.4rem; margin: 0; }
+  .sub { color: var(--muted); font-size: 0.9rem; }
+  .controls {
+    margin-left: auto;
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    font-size: 0.9rem;
+  }
+  input[type=number] {
+    width: 4.5rem;
+    padding: 0.3rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    color: var(--text);
+  }
+  button {
+    padding: 0.35rem 0.8rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    color: var(--text);
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  main {
+    padding: 0 2rem 2rem;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1rem;
+  }
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.9rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .card img {
+    width: 100%;
+    border-radius: 6px;
+    display: block;
+    background: var(--bg);
+  }
+  .name { font-weight: 600; font-size: 0.95rem; }
+  .meta { color: var(--muted); font-size: 0.78rem; }
+  .prices {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.82rem;
+    margin-top: 0.2rem;
+  }
+  .price-block { text-align: center; flex: 1; }
+  .price-block .label { color: var(--muted); font-size: 0.7rem; text-transform: uppercase; }
+  .price-block .value { font-weight: 600; }
+  .cheaper .value { color: var(--cheap); }
+  .spread {
+    align-self: flex-start;
+    background: var(--accent);
+    color: white;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .status { color: var(--muted); padding: 1rem 2rem; }
+  .fx-banner {
+    padding: 0.35rem 2rem;
+    font-size: 0.8rem;
+    color: var(--muted);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .fx-banner strong { color: var(--text); }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Pokemon Card Price Spread</h1>
+    <div class="sub">USD (TCGplayer) vs EUR (Cardmarket), converted to CAD at the snapshot's own FX rate</div>
+  </div>
+  <div class="controls">
+    <label for="limit">Show</label>
+    <input id="limit" type="number" value="30" min="1" max="200">
+    <button id="refresh">Refresh</button>
+  </div>
+</header>
+<div id="fxBanner" class="fx-banner"></div>
+<div id="status" class="status"></div>
+<main>
+  <div id="grid" class="grid"></div>
+</main>
+
+<script>
+  const grid = document.getElementById('grid');
+  const status = document.getElementById('status');
+  const limitInput = document.getElementById('limit');
+  const fxBanner = document.getElementById('fxBanner');
+
+  async function loadFx() {
+    try {
+      const res = await fetch('/fx');
+      if (!res.ok) throw new Error(`API returned ${res.status}`);
+      const rates = await res.json();
+      const asOf = rates[0] ? new Date(rates[0].rate_date + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+      fxBanner.innerHTML = rates
+        .map(r => `1 ${r.base_currency} = <strong>${r.rate.toFixed(4)}</strong> ${r.quote_currency}`)
+        .join(' &nbsp;&middot;&nbsp; ') + (asOf ? ` &nbsp;&middot;&nbsp; as of ${asOf}` : '');
+    } catch (err) {
+      fxBanner.textContent = `FX rates unavailable: ${err.message}`;
+    }
+  }
+
+  function imageUrl(base) {
+    return base + '/low.png';
+  }
+
+  function cardHtml(row) {
+    const tcgCheaper = row.cheaper_market === 'tcgplayer';
+    return `
+      <div class="card">
+        <img src="${imageUrl(row.image_url)}" alt="${row.name}" loading="lazy">
+        <div class="name">${row.name}</div>
+        <div class="meta">${row.card_id} &middot; ${row.variant}</div>
+        <div class="spread">${row.spread_pct}% spread</div>
+        <div class="prices">
+          <div class="price-block ${tcgCheaper ? 'cheaper' : ''}">
+            <div class="label">TCGplayer</div>
+            <div class="value">$${row.tcg_cad} CAD</div>
+          </div>
+          <div class="price-block ${!tcgCheaper ? 'cheaper' : ''}">
+            <div class="label">Cardmarket</div>
+            <div class="value">$${row.cm_cad} CAD</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  async function load() {
+    status.textContent = 'Loading...';
+    grid.innerHTML = '';
+    try {
+      const limit = limitInput.value || 30;
+      const res = await fetch(`/spread?limit=${limit}`);
+      if (!res.ok) throw new Error(`API returned ${res.status}`);
+      const rows = await res.json();
+      status.textContent = `${rows.length} cards, sorted by spread`;
+      grid.innerHTML = rows.map(cardHtml).join('');
+    } catch (err) {
+      status.textContent = `Failed to load: ${err.message}`;
+    }
+  }
+
+  document.getElementById('refresh').addEventListener('click', load);
+  load();
+  loadFx();
+</script>
+</body>
+</html>

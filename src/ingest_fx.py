@@ -1,3 +1,6 @@
+"""
+Get the latest exchange rates for a given base and quote currency.
+"""
 import httpx
 from db import get_conn
 

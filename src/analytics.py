@@ -30,16 +30,23 @@ spread AS (
         AND t.variant = c.variant
         AND t.source = 'tcgplayer'
         AND c.source = 'cardmarket'
-    JOIN fx_rates fx_t
-        ON fx_t.base_currency = t.currency
-        AND fx_t.quote_currency = 'CAD'
-        AND fx_t.rate_date = t.source_updated_at
-    JOIN fx_rates fx_c
-        ON fx_c.base_currency = c.currency
-        AND fx_c.quote_currency = 'CAD'
-        AND fx_c.rate_date = c.source_updated_at
+    JOIN LATERAL (
+    SELECT rate FROM fx_rates
+    WHERE base_currency = t.currency AND quote_currency = 'CAD'
+      AND rate_date <= t.source_updated_at
+    ORDER BY rate_date DESC LIMIT 1
+) fx_t ON true
+JOIN LATERAL (
+    SELECT rate FROM fx_rates
+    WHERE base_currency = c.currency AND quote_currency = 'CAD'
+      AND rate_date <= c.source_updated_at
+    ORDER BY rate_date DESC LIMIT 1
+) fx_c ON true
+
 )
-SELECT * FROM spread
+SELECT spread.*, cards.name, cards.image_url
+FROM spread
+JOIN cards ON cards.card_id = spread.card_id
 WHERE GREATEST(tcg_cad, cm_cad) > 5
 ORDER BY spread_pct DESC
 
@@ -47,5 +54,17 @@ ORDER BY spread_pct DESC
 
 def top_spreads(cur, limit: int = 20) -> list[dict]:
     cur.execute(SPREAD_QUERY + "LIMIT %s", (limit,))
+    cols = [desc[0] for desc in cur.description]
+    return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+FX_QUERY = """
+SELECT DISTINCT ON (base_currency, quote_currency)
+    base_currency, quote_currency, rate, rate_date
+FROM fx_rates
+ORDER BY base_currency, quote_currency, rate_date DESC
+"""
+
+def current_fx_rates(cur) -> list[dict]:
+    cur.execute(FX_QUERY)
     cols = [desc[0] for desc in cur.description]
     return [dict(zip(cols, row)) for row in cur.fetchall()]
