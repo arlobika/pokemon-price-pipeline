@@ -1,1 +1,5 @@
-httpx, psycopg[binary], fastapi, uvicorn, python-dotenv
+httpx
+psycopg[binary]
+fastapi
+uvicorn
+python-dotenv
